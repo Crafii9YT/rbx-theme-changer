@@ -15,7 +15,7 @@
 
 const CURRENT_VERSION = "1.0";
 const UPDATE_CHECK_URL = "https://crafii9yt.github.io/rbx-theme-changer/latest.txt";
-const DOWNLOAD_URL = "https://crafii9yt.github.io/rbx-theme-changer/";
+const DOWNLOAD_URL = "https://crafii9yt.github.io/rbx-theme-changer/script.txt";
 
 const darkColors = [
     "#111111", "#181818", "#202020", "#242424",

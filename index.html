@@ -1,0 +1,681 @@
+// ==UserScript==
+// @name         Roblox Custom Themes Unlock
+// @namespace    Crafii
+// @version      1.0
+// @description  Roblox custom themes with background update checker
+// @match        https://www.roblox.com/my/account*
+// @match        https://www.roblox.com/*
+// @connect      crafii9yt.github.io
+// @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
+// ==/UserScript==
+
+(function(){
+"use strict";
+
+const CURRENT_VERSION = "1.0";
+const UPDATE_CHECK_URL = "https://crafii9yt.github.io/rbx-theme-changer/latest.txt";
+const DOWNLOAD_URL = "https://crafii9yt.github.io/rbx-theme-changer/";
+
+const darkColors = [
+    "#111111", "#181818", "#202020", "#242424",
+    "#2f3640", "#353b48", "#192a56", "#273c75",
+    "#4834d4", "#130f40", "#30336b", "#1e272e"
+];
+
+const lightColors = [
+    "#ffffff", "#f8f9fa", "#f1f2f6", "#dfe4ea",
+    "#ced6e0", "#eccc68", "#ffda79", "#7bed9f",
+    "#70a1ff", "#a29bfe", "#ffeaa7", "#fab1a0"
+];
+
+let selectedColor = localStorage.getItem("robloxCustomTheme") || null;
+let isOutdated = false;
+let latestFoundVersion = null;
+
+function isDark(){
+    const html = document.documentElement;
+    return (
+        html.classList.contains("dark") ||
+        html.className.includes("dark") ||
+        document.body.className.includes("dark") ||
+        localStorage.getItem("theme") === "dark"
+    );
+}
+
+function getColors(){
+    return isDark() ? darkColors : lightColors;
+}
+
+function isColorDark(hex) {
+    if (!hex || hex.charAt(0) !== '#') return true;
+    const color = hex.substring(1);
+    const rgb = parseInt(color.length === 3 ? color.split('').map(c => c + c).join('') : color, 16);
+    const r = (rgb >> 16) & 0xff;
+    const g = (rgb >>  8) & 0xff;
+    const b = (rgb >>  0) & 0xff;
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luma < 128;
+}
+
+function applyTheme(color){
+    let style = document.getElementById("robloxThemeCSS");
+
+    if(!style){
+        style = document.createElement("style");
+        style.id = "robloxThemeCSS";
+        document.head.appendChild(style);
+    }
+
+    const isDarkBg = isColorDark(color);
+    const textColor = isDarkBg ? "#ffffff" : "#111111";
+
+    style.textContent = `
+/* CSS VARIABLES FOR ROBLOX THEME ENGINE */
+:root {
+    --sidebar-background-color: ${color} !important;
+    --sidebar-bg: ${color} !important;
+    --rbx-sidebar-bg: ${color} !important;
+    --navigation-bg: ${color} !important;
+}
+
+/* MAIN BACKGROUND & DEFAULT TEXT COLOR */
+html,
+body,
+#app,
+#root,
+#container-main,
+.content,
+.main-content {
+    background-color: ${color} !important;
+    color: ${textColor} !important;
+}
+
+/* SIDEBAR MAIN CONTAINER BACKGROUND */
+#navigation,
+#navigation-container,
+.rbx-left-col,
+.left-navigation,
+.navigation-content,
+.left-col-list,
+.nav-content {
+    background-color: ${color} !important;
+}
+
+/* TRANSPARENT SIDEBAR LINKS */
+#navigation .left-col-list li a,
+.rbx-left-col ul li a,
+.left-navigation a {
+    background-color: transparent !important;
+    color: ${textColor} !important;
+}
+
+/* HOVER EFFECT ON LINKS ONLY */
+#navigation .left-col-list li a:hover,
+.rbx-left-col ul li a:hover,
+.left-navigation a:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* HEADER BACKGROUND FIX */
+header, #header, .navbar, [class*="header"] {
+    background-color: ${color} !important;
+}
+
+/* PROTECT BADGES & NUMBERS */
+.notification-badge, .badge-number, [class*="badge"], .notification-count {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* PROTECT LOGO & ALL SPRITE ICONS */
+.icon-logo, .icon-logo-r, .logo, [class*="icon-"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* SPINNER ANIMATION */
+@keyframes rbx-spinner {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.rbx-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.2);
+    border-top: 4px solid #ffffff;
+    border-radius: 50%;
+    animation: rbx-spinner 0.8s linear infinite;
+    margin: 15px auto;
+}
+
+/* RED GLOWING DOT FOR UPDATE BUTTON */
+@keyframes update-glow {
+    0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.8); }
+    70% { box-shadow: 0 0 0 8px rgba(255, 71, 87, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+}
+
+.update-red-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 10px;
+    height: 10px;
+    background-color: #ff4757;
+    border-radius: 50%;
+    border: 2px solid #232527;
+    animation: update-glow 1.5s infinite;
+}
+
+/* PANEL OVERRIDES */
+#themePanel {
+    background: transparent !important;
+    width: 100% !important;
+    margin-top: 30px !important;
+    clear: both !important;
+}
+`;
+
+    setTimeout(()=>{
+        styleSettingsNavigation(color);
+    }, 500);
+}
+
+function styleSettingsNavigation(color){
+    const names = ["Account Info", "Security", "Privacy", "Parental Controls", "Billing"];
+    let found = [];
+
+    document.querySelectorAll("*").forEach(el => {
+        const text = el.innerText?.trim();
+        if(text && names.includes(text)){
+            found.push(el);
+        }
+    });
+
+    if(found.length === 0) return;
+
+    let navContainer = found[0].parentElement;
+
+    while (navContainer && navContainer !== document.body) {
+        const tag = navContainer.tagName.toLowerCase();
+        const isNavType = tag === 'ul' || tag === 'nav' || navContainer.getAttribute('role') === 'tablist';
+
+        let matchCount = 0;
+        names.forEach(name => {
+            if(navContainer.innerText?.includes(name)) matchCount++;
+        });
+
+        if(matchCount >= 2 && (isNavType || navContainer.children.length <= 10)){
+            break;
+        }
+
+        navContainer = navContainer.parentElement;
+    }
+
+    if(!navContainer) return;
+
+    navContainer.style.background = color;
+    navContainer.style.borderRadius = "14px";
+    navContainer.style.padding = "10px";
+    navContainer.style.border = "none";
+    navContainer.id = "robloxSettingsNavigationTheme";
+}
+
+const saved = localStorage.getItem("robloxCustomTheme");
+if(saved){
+    selectedColor = saved;
+    applyTheme(saved);
+}
+
+function showSave(){
+    if (isOutdated) return;
+
+    let old = document.getElementById("themeSave");
+    if(old) old.remove();
+
+    const box = document.createElement("div");
+    box.id = "themeSave";
+    box.style.cssText = `
+        position: fixed;
+        bottom: 25px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #191919;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 12px;
+        z-index: 999999;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        font-family: Arial, sans-serif;
+    `;
+
+    box.innerHTML = `
+        <span>You have unsaved changes.</span>
+        <button>Save Changes</button>
+    `;
+
+    const btn = box.querySelector("button");
+    btn.style.cssText = `
+        background: #5865F2;
+        color: white;
+        border: 0;
+        padding: 8px 15px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+    `;
+
+    btn.onclick = () => {
+        localStorage.setItem("robloxCustomTheme", selectedColor);
+        applyTheme(selectedColor);
+        updateThemeButtons();
+        box.remove();
+    };
+
+    document.body.appendChild(box);
+}
+
+function createCustomButton(grid){
+    const custom = document.createElement("button");
+    const isCustomSelected = selectedColor && !getColors().includes(selectedColor);
+
+    custom.textContent = "Custom Theme";
+    custom.disabled = isOutdated;
+    custom.style.cssText = `
+        height: 65px;
+        background: #242424;
+        color: white;
+        border: ${isCustomSelected ? '3px solid #5865F2' : 'none'};
+        border-radius: 10px;
+        cursor: ${isOutdated ? 'not-allowed' : 'pointer'};
+        font-weight: bold;
+        box-shadow: ${isCustomSelected ? '0 0 10px rgba(88, 101, 242, 0.6)' : 'none'};
+        opacity: ${isOutdated ? '0.5' : '1'};
+    `;
+
+    custom.onclick = () => {
+        if (isOutdated) return;
+        const picker = document.createElement("input");
+        picker.type = "color";
+        picker.value = selectedColor || "#5865F2";
+        picker.style.position = "fixed";
+        picker.style.left = "-100px";
+
+        document.body.appendChild(picker);
+        picker.click();
+
+        picker.oninput = () => {
+            selectedColor = picker.value;
+            showSave();
+            updateThemeButtons();
+        };
+
+        picker.onchange = () => {
+            picker.remove();
+        };
+    };
+
+    grid.appendChild(custom);
+}
+
+function renderGridContent(grid){
+    grid.innerHTML = "";
+
+    const activeColor = selectedColor || localStorage.getItem("robloxCustomTheme");
+
+    getColors().forEach(color => {
+        const isSelected = activeColor && activeColor.toLowerCase() === color.toLowerCase();
+        const button = document.createElement("button");
+        button.disabled = isOutdated;
+
+        button.style.cssText = `
+            height: 65px;
+            background: #242424;
+            border: ${isSelected ? '3px solid #5865F2' : 'none'};
+            border-radius: 10px;
+            cursor: ${isOutdated ? 'not-allowed' : 'pointer'};
+            box-shadow: ${isSelected ? '0 0 10px rgba(88, 101, 242, 0.6)' : 'none'};
+            transition: transform 0.1s ease;
+            opacity: ${isOutdated ? '0.5' : '1'};
+        `;
+
+        button.innerHTML = `
+            <div style="
+                width: 35px;
+                height: 35px;
+                border-radius: 50%;
+                background: ${color};
+                margin: auto;
+                border: 2px solid ${isSelected ? '#ffffff' : 'rgba(255,255,255,0.2)'};
+            "></div>
+        `;
+
+        button.onclick = () => {
+            if (isOutdated) return;
+            selectedColor = color;
+            showSave();
+            updateThemeButtons();
+        };
+
+        grid.appendChild(button);
+    });
+
+    createCustomButton(grid);
+}
+
+/* CROSS-ORIGIN REQUEST HELPER */
+function makeRequest(url, callbackError, callbackSuccess) {
+    const httpRequest = (typeof GM_xmlhttpRequest !== "undefined") ? GM_xmlhttpRequest : (typeof GM !== "undefined" && GM.xmlHttpRequest) ? GM.xmlHttpRequest : null;
+
+    if (httpRequest) {
+        httpRequest({
+            method: "GET",
+            url: url,
+            nocache: true,
+            onload: function(response) {
+                if (response.status >= 200 && response.status < 300) {
+                    callbackSuccess(response.responseText);
+                } else {
+                    callbackError();
+                }
+            },
+            onerror: function() {
+                callbackError();
+            }
+        });
+    } else {
+        fetch(url, { cache: "no-store" })
+            .then(res => res.text())
+            .then(text => callbackSuccess(text))
+            .catch(() => callbackError());
+    }
+}
+
+/* BACKGROUND UPDATE CHECK */
+function checkUpdateInBackground() {
+    makeRequest(
+        UPDATE_CHECK_URL,
+        function onError() {},
+        function onSuccess(text) {
+            const latestVer = text.trim();
+            if (parseFloat(latestVer) > parseFloat(CURRENT_VERSION)) {
+                isOutdated = true;
+                latestFoundVersion = latestVer;
+                updateRedDotVisibility();
+                updateThemeButtons();
+            }
+        }
+    );
+}
+
+function updateRedDotVisibility() {
+    const updateBtn = document.getElementById("searchUpdatesBtn");
+    if (!updateBtn) return;
+
+    let dot = updateBtn.querySelector(".update-red-dot");
+    if (isOutdated) {
+        if (!dot) {
+            dot = document.createElement("div");
+            dot.className = "update-red-dot";
+            updateBtn.appendChild(dot);
+        }
+    } else if (dot) {
+        dot.remove();
+    }
+}
+
+/* UPDATE CHECKER POPUP LOGIC */
+function openUpdateModal(){
+    let oldModal = document.getElementById("themeUpdateModal");
+    if(oldModal) oldModal.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "themeUpdateModal";
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 1000000;
+        font-family: Arial, sans-serif;
+    `;
+
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+        background: #232527;
+        color: #ffffff;
+        padding: 25px 30px;
+        border-radius: 12px;
+        text-align: center;
+        width: 320px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    `;
+
+    modal.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; color: #fff;">Checking for updates...</h3>
+        <div class="rbx-spinner"></div>
+        <p id="updateModalStatus" style="font-size: 13px; color: #bdc3c7; margin: 10px 0 0 0;">Connecting to server...</p>
+        <div id="updateModalAction" style="margin-top: 20px;"></div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    makeRequest(
+        UPDATE_CHECK_URL,
+        function onError() {
+            const statusEl = document.getElementById("updateModalStatus");
+            const actionEl = document.getElementById("updateModalAction");
+            const spinner = modal.querySelector(".rbx-spinner");
+
+            if (spinner) spinner.remove();
+            if (statusEl) statusEl.textContent = "Failed to check for updates.";
+
+            const closeBtn = document.createElement("button");
+            closeBtn.textContent = "Close";
+            closeBtn.style.cssText = `
+                background: #393b3d; color: white; border: none;
+                padding: 8px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;
+            `;
+            closeBtn.onclick = () => overlay.remove();
+
+            if(actionEl) actionEl.appendChild(closeBtn);
+        },
+        function onSuccess(text) {
+            const latestVer = text.trim();
+            const statusEl = document.getElementById("updateModalStatus");
+            const actionEl = document.getElementById("updateModalAction");
+            const spinner = modal.querySelector(".rbx-spinner");
+
+            if (spinner) spinner.remove();
+
+            if (parseFloat(latestVer) > parseFloat(CURRENT_VERSION)) {
+                isOutdated = true;
+                latestFoundVersion = latestVer;
+                if(statusEl) statusEl.textContent = `New version available: v${latestVer} (Current: v${CURRENT_VERSION})`;
+
+                const updateBtn = document.createElement("button");
+                updateBtn.textContent = "Update Now";
+                updateBtn.style.cssText = `
+                    background: #00a2ff;
+                    color: white; border: none; padding: 10px 20px;
+                    border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%;
+                `;
+                updateBtn.onclick = () => {
+                    window.open(DOWNLOAD_URL, "_blank");
+                };
+
+                if(actionEl) actionEl.appendChild(updateBtn);
+
+                updateRedDotVisibility();
+                updateThemeButtons();
+            } else {
+                isOutdated = false;
+                if(statusEl) statusEl.textContent = `You are on the latest version! (v${CURRENT_VERSION})`;
+
+                const closeBtn = document.createElement("button");
+                closeBtn.textContent = "Close";
+                closeBtn.style.cssText = `
+                    background: #393b3d; color: white; border: none;
+                    padding: 8px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px;
+                `;
+                closeBtn.onclick = () => overlay.remove();
+
+                if(actionEl) actionEl.appendChild(closeBtn);
+
+                updateRedDotVisibility();
+                updateThemeButtons();
+            }
+        }
+    );
+}
+
+function createPanel(){
+    if(document.getElementById("themePanel")) return;
+
+    const panel = document.createElement("div");
+    panel.id = "themePanel";
+    panel.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+            <h2 style="margin: 0; font-size: 20px; font-weight: bold;">Custom Themes</h2>
+            <button id="searchUpdatesBtn" style="
+                position: relative;
+                background: #393b3d;
+                color: #ffffff;
+                border: none;
+                padding: 8px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: bold;
+            ">Search for Updates</button>
+        </div>
+        <div id="themeGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:15px;"></div>
+    `;
+
+    const updateBtn = panel.querySelector("#searchUpdatesBtn");
+    updateBtn.onclick = openUpdateModal;
+
+    const grid = panel.querySelector("#themeGrid");
+    renderGridContent(grid);
+    insertPanel(panel);
+    updateRedDotVisibility();
+}
+
+function updateThemeButtons(){
+    const panel = document.getElementById("themePanel");
+    if(!panel) return;
+
+    const grid = panel.querySelector("#themeGrid");
+    if(!grid) return;
+
+    renderGridContent(grid);
+}
+
+function insertPanel(panel){
+    const target = [...document.querySelectorAll("h1,h2,h3")].find(x => x.innerText.includes("Browser"));
+
+    if(target && target.closest(".section-content")) {
+        target.closest(".section-content").appendChild(panel);
+    } else if (target) {
+        let parent = target;
+        for(let i = 0; i < 3; i++){
+            if(parent.parentElement) parent = parent.parentElement;
+        }
+        parent.appendChild(panel);
+    }
+}
+
+function addUnlock(){
+    if(document.getElementById("unlockThemeButton")) return;
+
+    const button = document.createElement("button");
+    button.id = "unlockThemeButton";
+    button.textContent = "Unlock for Free";
+    button.style.cssText = `
+        margin-top: 40px;
+        width: 100%;
+        height: 48px;
+        background: #5865F2;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+    `;
+
+    button.onclick = () => {
+        localStorage.setItem("robloxThemeUnlocked", "true");
+        button.remove();
+        createPanel();
+    };
+
+    const target = [...document.querySelectorAll("h1,h2,h3")].find(x => x.innerText.includes("Browser"));
+    if(!target) return;
+
+    let parent = target;
+    for(let i = 0; i < 3; i++){
+        if(parent.parentElement) parent = parent.parentElement;
+    }
+    parent.appendChild(button);
+}
+
+function removePanel(){
+    const panel = document.getElementById("themePanel");
+    if(panel) panel.remove();
+
+    const button = document.getElementById("unlockThemeButton");
+    if(button) button.remove();
+}
+
+function run(){
+    const isBrowserPreferences = location.hash === "#!/browser-preferences" || location.href.includes("browser-preferences");
+
+    if (!isBrowserPreferences) {
+        removePanel();
+        return;
+    }
+
+    if(localStorage.getItem("robloxThemeUnlocked")){
+        createPanel();
+    } else {
+        addUnlock();
+    }
+}
+
+/* BACKGROUND UPDATE CHECK LOOP (Alle 5-30 Minuten) */
+function scheduleBackgroundCheck() {
+    checkUpdateInBackground();
+    // Zufallsintervall zwischen 5 Minuten (300.000 ms) und 30 Minuten (1.800.000 ms)
+    const randomInterval = Math.floor(Math.random() * (1800000 - 300000 + 1)) + 300000;
+    setTimeout(scheduleBackgroundCheck, randomInterval);
+}
+scheduleBackgroundCheck();
+
+/* Live Theme Switch Watcher */
+let lastMode = isDark();
+
+setInterval(() => {
+    const now = isDark();
+    if(now !== lastMode){
+        lastMode = now;
+        updateThemeButtons();
+        const saved = localStorage.getItem("robloxCustomTheme");
+        if(saved) applyTheme(saved);
+    }
+}, 1000);
+
+/* React Mutation Observer */
+new MutationObserver(() => {
+    const saved = localStorage.getItem("robloxCustomTheme");
+    if(saved) applyTheme(saved);
+}).observe(document.body, { childList: true, subtree: true });
+
+setInterval(run, 500);
+
+})();

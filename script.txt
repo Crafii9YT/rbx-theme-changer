@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Roblox Custom Themes Unlock
 // @namespace    Crafii
-// @version      1.1
-// @description  Known Bugs: Sidebar not fully colouring.
+// @version      1.2
+// @description  Known Bugs: Dropdown Menu & Sidebar
 // @match        https://www.roblox.com/my/account*
 // @match        https://www.roblox.com/*
 // @connect      crafii9yt.github.io
@@ -13,7 +13,7 @@
 (function(){
 "use strict";
 
-const CURRENT_VERSION = "1.1";
+const CURRENT_VERSION = "1.2";
 const UPDATE_CHECK_URL = "https://crafii9yt.github.io/rbx-theme-changer/latest.txt";
 const DOWNLOAD_URL = "https://crafii9yt.github.io/rbx-theme-changer/script.txt";
 
@@ -111,17 +111,28 @@ body,
     color: ${textColor} !important;
 }
 
-/* FIX FOR MODE DROPDOWN TEXT TRUNCATION (S..., D..., L...) */
+/* COMPLETE FIX FOR MODE DROPDOWN TRUNCATION (S..., D..., L...) */
+.rbx-select-group,
+.rbx-select,
+.input-group-btn,
 .select-option,
+.select-option a,
 .select-option span,
-.select-button,
-.select-button span,
+.input-dropdown-btn,
 [class*="select-"] {
-    text-overflow: clip !important;
-    white-space: nowrap !important;
-    overflow: visible !important;
     width: auto !important;
+    min-width: 120px !important;
     max-width: none !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    white-space: nowrap !important;
+}
+
+.input-dropdown-btn span,
+.rbx-select option {
+    text-overflow: unset !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
 }
 
 /* SIDEBAR MAIN CONTAINER BACKGROUND */
@@ -237,14 +248,14 @@ function styleSettingsNavigation(color){
     while (navContainer && navContainer !== document.body) {
         const tag = navContainer.tagName.toLowerCase();
         const isNavType = tag === 'ul' || tag === 'nav' || navContainer.getAttribute('role') === 'tablist';
-        
+
         let matchCount = 0;
         names.forEach(name => {
             if(navContainer.innerText?.includes(name)) matchCount++;
         });
 
         if(matchCount >= 2 && (isNavType || navContainer.children.length <= 10)){
-            break; 
+            break;
         }
 
         navContainer = navContainer.parentElement;
@@ -535,7 +546,7 @@ function openUpdateModal(){
                 isOutdated = true;
                 latestFoundVersion = latestVer;
                 if(statusEl) statusEl.textContent = `New version available: v${latestVer} (Current: v${CURRENT_VERSION})`;
-                
+
                 const updateBtn = document.createElement("button");
                 updateBtn.textContent = "Update Now";
                 updateBtn.style.cssText = `
@@ -548,13 +559,13 @@ function openUpdateModal(){
                 };
 
                 if(actionEl) actionEl.appendChild(updateBtn);
-                
+
                 updateRedDotVisibility();
                 updateThemeButtons();
             } else {
                 isOutdated = false;
                 if(statusEl) statusEl.textContent = `You are on the latest version! (v${CURRENT_VERSION})`;
-                
+
                 const closeBtn = document.createElement("button");
                 closeBtn.textContent = "Close";
                 closeBtn.style.cssText = `
@@ -564,7 +575,7 @@ function openUpdateModal(){
                 closeBtn.onclick = () => overlay.remove();
 
                 if(actionEl) actionEl.appendChild(closeBtn);
-                
+
                 updateRedDotVisibility();
                 updateThemeButtons();
             }
@@ -611,7 +622,7 @@ function createPanel(){
     toggleBtn.onclick = () => {
         isThemeEnabled = !isThemeEnabled;
         localStorage.setItem("robloxCustomThemeEnabled", isThemeEnabled ? "true" : "false");
-        
+
         toggleBtn.textContent = isThemeEnabled ? "Disable Custom Themes" : "Enable Custom Themes";
         toggleBtn.style.background = isThemeEnabled ? "#e74c3c" : "#2ecc71";
 

@@ -2,7 +2,7 @@
 // @name         Roblox Custom Themes Unlock
 // @namespace    Crafii
 // @version      1.1
-// @description  Known Bugs are: The Mode Dropdown
+// @description  Known Bugs: Sidebar not fully colouring.
 // @match        https://www.roblox.com/my/account*
 // @match        https://www.roblox.com/*
 // @connect      crafii9yt.github.io
@@ -109,6 +109,19 @@ body,
 .main-content {
     background-color: ${color} !important;
     color: ${textColor} !important;
+}
+
+/* FIX FOR MODE DROPDOWN TEXT TRUNCATION (S..., D..., L...) */
+.select-option,
+.select-option span,
+.select-button,
+.select-button span,
+[class*="select-"] {
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    width: auto !important;
+    max-width: none !important;
 }
 
 /* SIDEBAR MAIN CONTAINER BACKGROUND */
